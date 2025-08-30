@@ -23,12 +23,14 @@ CORS(app, resources={r"/*": {"origins": "http://localhost:8080"}}, methods=["GET
 
 # Load your trained modelp
 
+# Model path
+MODEL_PATH = os.path.join("MODEL", "final_improved_model.h5")
+MODEL = load_model(MODEL_PATH)
 
-
-model = load_model(r"C:\Users\Rising Phoenix\Desktop\SRS project\speech_recognization\MODEL\final_improved_model.h5")
-with open(r"C:\Users\Rising Phoenix\Desktop\SRS project\speech_recognization\DATAFILE\label_encoder.pkl", "rb") as f:
+# Label encoder path
+DATAFILE_PATH = os.path.join("DATAFILE", "label_encoder.pkl")
+with open(DATAFILE_PATH, "rb") as f:
     label_encoder = pickle.load(f)
-
 
 # Label mapping (update if needed)
 CLASS_LABELS = ['angry', 'calm', 'disgust', 'fear', 'happy', 'neutral', 'sad']
