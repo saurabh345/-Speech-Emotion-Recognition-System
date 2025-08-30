@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Speech Emotion Prediction</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      padding: 20px;
+      background: linear-gradient(to bottom right, #e0f7fa, #ffffff);
+      margin: 0;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      background: white;
+      padding: 30px;
+      border-radius: 16px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+      text-align: center;
+    }
+
+    h2 {
+      color: #007bff;
+      margin-bottom: 25px;
+    }
+
+    .drop-zone, .record-zone {
+      border: 2px dashed #007bff;
+      padding: 20px;
+      border-radius: 10px;
+      background: #f1f9ff;
+      color: #555;
+      font-size: 15px;
+      transition: 0.3s ease;
+      margin-bottom: 15px;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    .file-name {
+      font-weight: 500;
+      color: green;
+      margin-bottom: 15px;
+    }
+
+    button {
+      padding: 12px 20px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      cursor: pointer;
+      margin: 10px 5px;
+    }
+
+    button:hover {
+      background: #0056b3;
+    }
+
+    .result {
+      margin-top: 25px;
+      font-size: 16px;
+      color: #333;
+    }
+
+    .loading {
+      margin-top: 20px;
+      font-size: 15px;
+      color: #888;
+    }
+
+    audio {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🎤 Speech Emotion recognition</h2>
+
+    <div class="drop-zone" id="dropZone">📂 Drag & drop a <strong>.wav</strong> file or click to select</div>
+    <input type="file" id="fileInput" accept=".wav" />
+    <div class="file-name" id="fileName">📂 No file selected</div>
+    <button id="uploadBtn">🔍 Predict Emotion</button>
+
+    <hr>
+
+    <div class="record-zone">
+      <p>🎙️ Or record your voice directly:</p>
+      <button id="recordBtn">Start Recording</button>
+      <button id="stopBtn" disabled>Stop</button>
+      <audio id="audioPlayer" controls></audio>
+    </div>
+
+    <div class="loading" id="loading" style="display:none;">⏳ Processing...</div>
+    <div class="result" id="result"></div>
+  </div>
+
+  <script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const fileName = document.getElementById('fileName');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const resultDiv = document.getElementById('result');
+    const loadingDiv = document.getElementById('loading');
+
+    const recordBtn = document.getElementById('recordBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const audioPlayer = document.getElementById('audioPlayer');
+
+    let audioBlob;
+
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    dropZone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file && file.name.endsWith('.wav')) {
+        fileInput.files = e.dataTransfer.files;
+        fileName.textContent = `✅ ${file.name}`;
+        audioBlob = null;
+      } else {
+        alert("⚠️ Please upload a valid .wav file.");
+      }
+    });
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (file) {
+        fileName.textContent = `✅ ${file.name}`;
+        audioBlob = null;
+      } else {
+        fileName.textContent = '📂 No file selected';
+      }
+    });
+
+    uploadBtn.addEventListener('click', async () => {
+      resultDiv.textContent = '';
+      loadingDiv.style.display = 'block';
+      const formData = new FormData();
+
+      if (audioBlob) {
+        formData.append('file', audioBlob, 'recorded.wav');
+      } else if (fileInput.files.length > 0) {
+        formData.append('file', fileInput.files[0]);
+      } else {
+        alert("⚠️ Please select or record an audio file first.");
+        loadingDiv.style.display = 'none';
+        return;
+      }
+
+      try {
+        const res = await fetch('/predict', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        loadingDiv.style.display = 'none';
+
+        if (res.ok) {
+          resultDiv.innerHTML = `
+            <div>🧠 <strong>Predicted Emotion:</strong> ${data.predicted_class}</div>
+            <div>📊 <strong>Confidence:</strong> ${(data.confidence * 100).toFixed(2)}%</div>
+          `;
+        } else {
+          resultDiv.innerHTML = `<span style="color:red;">❌ ${data.error}</span>`;
+        }
+      } catch (err) {
+        loadingDiv.style.display = 'none';
+        resultDiv.innerHTML = `<span style="color:red;">❌ Server error: ${err}</span>`;
+      }
+    });
+
+    // 🎙️ Recording functionality
+    let mediaRecorder, audioChunks = [];
+
+    recordBtn.addEventListener('click', async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
+
+      mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+
+      mediaRecorder.onstop = () => {
+        audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        audioPlayer.src = audioUrl;
+        audioPlayer.style.display = 'block';
+        fileName.textContent = '🎤 Recording ready for prediction.';
+        fileInput.value = ''; // clear manual file selection
+      };
+
+      mediaRecorder.start();
+      recordBtn.disabled = true;
+      stopBtn.disabled = false;
+    });
+
+    stopBtn.addEventListener('click', () => {
+      mediaRecorder.stop();
+      recordBtn.disabled = false;
+      stopBtn.disabled = true;
+    });
+  </script>
+</body>
+</html>
